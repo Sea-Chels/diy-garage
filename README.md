@@ -28,11 +28,7 @@ pnpm build      # outputs dist/
 |---|---|---|
 | Models for a year + make | NHTSA vPIC API, keyless, CORS-enabled | Free |
 | Repair catalog, steps, tools, cautions | `src/data/repairs.ts`, hand-written | Free |
-| Videos | YouTube Data API v3, optional | Free, about 100 searches/day |
-
-Without a YouTube key the video modal links out to a YouTube search for the selected car. With a key it lists and plays videos in-page through the `youtube-nocookie.com` embed. Results are cached in localStorage for a week to stretch the quota.
-
-YouTube embeds are not guaranteed ad-free. The privacy-enhanced embed drops tracking cookies until play, but the creator decides whether ads run.
+| Videos | A YouTube search for your year, make, model and the job, opened in a new tab | Free |
 
 ## Project layout
 
@@ -42,11 +38,11 @@ src/
   data/repairs.ts    the repair catalog; add jobs here
   data/makes.ts      make list, year range, powertrain guess
   api/vpic.ts        NHTSA model lookup
-  api/youtube.ts     search + localStorage cache, API key handling
+  api/youtube.ts     builds the YouTube search link
   scene/car.ts       the stylized car (swap this to iterate on the model)
   scene/scene.ts     renderer, lights, picking, camera fly-to
   scene/tween.ts     tiny tween runner
-  ui/*               vehicle picker, side panel, video modal, glossary, settings
+  ui/*               vehicle picker, side panel, glossary, icons
 ```
 
 ### Iterating on the car
@@ -65,16 +61,5 @@ Add an entry to `REPAIRS` in `src/data/repairs.ts`. List the hotspots it belongs
 
 1. Push to a GitHub repo on the `main` branch.
 2. In the repo, go to Settings, then Pages, and set Source to "GitHub Actions".
-3. Optional: add a repository secret named `YT_API_KEY` for in-page videos. Read the next section first.
-
-### About the YouTube key
-
-A GitHub secret keeps the key out of the repo, its history and the Actions logs. It does not keep the key private once the site is built. Vite writes it into the JavaScript bundle, and anyone can read it from the browser's dev tools. Every client-side app that calls Google APIs works this way, which is why Google lets you lock browser keys down:
-
-- **Restrict where it works.** In Google Cloud, under Credentials, set Application restrictions to HTTP referrers and add `https://sea-chels.github.io/*`.
-- **Restrict what it can do.** Set API restrictions to the YouTube Data API v3 only.
-- **Use a dedicated project.** Give the key its own Google Cloud project with no billing account attached, so it can't touch anything else.
-
-The worst realistic outcome is someone using up the free daily quota, after which the video window falls back to plain YouTube links until midnight Pacific. If that ever matters, move the search call behind a small proxy, such as a Cloudflare Worker, so the key never reaches the browser.
 
 The workflow in `.github/workflows/deploy.yml` builds with the right base path and publishes `dist/`.

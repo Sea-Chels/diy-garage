@@ -2,15 +2,13 @@
  * Lucide icons (https://lucide.dev), imported individually so only the used
  * ones end up in the bundle.
  */
-import { createElement, ArrowLeft, BookOpen, ExternalLink, PiggyBank, Play, Settings, TriangleAlert, Wrench, X, type IconNode } from 'lucide';
+import { createElement, BookOpen, ExternalLink, PiggyBank, Play, TriangleAlert, Wrench, X, type IconNode } from 'lucide';
 
 const ICONS = {
-  'arrow-left': ArrowLeft,
   book: BookOpen,
   external: ExternalLink,
   savings: PiggyBank,
   play: Play,
-  settings: Settings,
   warning: TriangleAlert,
   wrench: Wrench,
   close: X,

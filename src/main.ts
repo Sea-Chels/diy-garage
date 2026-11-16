@@ -6,7 +6,6 @@ import { getState, setState, subscribe } from './ui/store';
 import { mountVehiclePicker } from './ui/vehiclePicker';
 import { mountPanel } from './ui/panel';
 import { openGlossary } from './ui/glossary';
-import { openSettings } from './ui/settings';
 import { h, clear } from './ui/dom';
 import { hydrateIcons } from './ui/icons';
 
@@ -18,7 +17,6 @@ const scene = createScene(canvas);
 mountVehiclePicker(document.getElementById('vehicle-picker')!);
 mountPanel(document.getElementById('panel')!);
 document.getElementById('glossary-btn')!.addEventListener('click', openGlossary);
-document.getElementById('settings-btn')!.addEventListener('click', openSettings);
 
 // 3D → state
 scene.onSelect((part) => {

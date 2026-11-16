@@ -2,7 +2,7 @@ import { PARTS } from '../data/parts';
 import { DIFFICULTY_LABEL, repairsForPart, type Repair } from '../data/repairs';
 import { getState, setState, subscribe, vehicleLabel, hasVehicle } from './store';
 import { h, clear, fmtMinutes } from './dom';
-import { openVideoModal } from './videoModal';
+import { searchUrl } from '../api/youtube';
 import { icon } from './icons';
 
 export function mountPanel(root: HTMLElement): void {
@@ -74,11 +74,13 @@ export function mountPanel(root: HTMLElement): void {
     body.append(h('p', { class: 'summary' }, r.summary));
     body.append(h('p', { class: 'savings' }, icon('savings', 16), h('span', {}, r.savings)));
 
+    const car = hasVehicle(vehicle) ? vehicleLabel(vehicle) : 'car';
     const videoBtn = h(
-      'button',
-      { class: 'primary-btn', onClick: () => openVideoModal(r) },
+      'a',
+      { class: 'primary-btn', href: searchUrl(`${car} ${r.query}`), target: '_blank', rel: 'noopener noreferrer' },
       icon('play', 16),
       hasVehicle(vehicle) ? `Videos for your ${vehicleLabel(vehicle)}` : 'Watch how-to videos',
+      icon('external', 15),
     );
     body.append(videoBtn);
     if (!hasVehicle(vehicle)) body.append(h('p', { class: 'hint-text' }, 'Pick your year, make and model above to get videos for your exact car.'));
