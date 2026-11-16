@@ -1,8 +1,18 @@
 # DIY Garage
 
+**Live site: https://sea-chels.github.io/diy-garage/**
+
 Click a part of a stylized 3D car, see the repairs you can safely do yourself, and watch how-to videos for your exact year, make and model.
 
 Purely client-side: Vite + TypeScript + Three.js, no backend, no database.
+
+![Clicking quick fixes opens the hood and trunk, then the glossary searches every job](docs/demo.gif)
+
+| Pick a part, get the job | Search everything you can fix |
+|---|---|
+| ![Oil change steps, tools and cautions beside the open engine bay](docs/repair-panel.jpg) | ![Glossary filtered to fuse-related jobs](docs/glossary.jpg) |
+
+![The car at rest with glowing dots on each clickable part](docs/overview.jpg)
 
 ## Run
 
@@ -55,6 +65,16 @@ Add an entry to `REPAIRS` in `src/data/repairs.ts`. List the hotspots it belongs
 
 1. Push to a GitHub repo on the `main` branch.
 2. In the repo, go to Settings, then Pages, and set Source to "GitHub Actions".
-3. Optional: add a repository secret named `YT_API_KEY`. Restrict that key to your Pages domain under HTTP referrers in Google Cloud, because anything built into a static site is public.
+3. Optional: add a repository secret named `YT_API_KEY` for in-page videos. Read the next section first.
+
+### About the YouTube key
+
+A GitHub secret keeps the key out of the repo, its history and the Actions logs. It does not keep the key private once the site is built. Vite writes it into the JavaScript bundle, and anyone can read it from the browser's dev tools. Every client-side app that calls Google APIs works this way, which is why Google lets you lock browser keys down:
+
+- **Restrict where it works.** In Google Cloud, under Credentials, set Application restrictions to HTTP referrers and add `https://sea-chels.github.io/*`.
+- **Restrict what it can do.** Set API restrictions to the YouTube Data API v3 only.
+- **Use a dedicated project.** Give the key its own Google Cloud project with no billing account attached, so it can't touch anything else.
+
+The worst realistic outcome is someone using up the free daily quota, after which the video window falls back to plain YouTube links until midnight Pacific. If that ever matters, move the search call behind a small proxy, such as a Cloudflare Worker, so the key never reaches the browser.
 
 The workflow in `.github/workflows/deploy.yml` builds with the right base path and publishes `dist/`.
