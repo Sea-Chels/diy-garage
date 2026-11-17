@@ -31,6 +31,8 @@ export interface PartInfo {
   related?: PartId[];
   /** Which lid must be opened to see this part. */
   behind?: 'hood' | 'trunk' | 'door';
+  /** Visible (and clickable) through glass even while its lid is closed. */
+  seeThrough?: boolean;
 }
 
 export const PARTS: Record<PartId, PartInfo> = {
@@ -49,7 +51,7 @@ export const PARTS: Record<PartId, PartInfo> = {
   brakes: { id: 'brakes', label: 'Brakes', blurb: 'Pads are a solid intermediate job. Fluid level is a glance.' },
   trunk: { id: 'trunk', label: 'Trunk', blurb: 'Tail light access, spare tire, and struts that stop holding it up.', related: ['taillight'] },
   door: { id: 'door', label: 'Doors & mirrors', blurb: 'Mirror glass, weather strips and touch-up paint.', related: ['cabin', 'fusebox_cabin'] },
-  cabin: { id: 'cabin', label: 'Cabin', blurb: 'Cabin filter, dome lights, key fob and the diagnostic port under the dash.', behind: 'door', related: ['fusebox_cabin'] },
+  cabin: { id: 'cabin', label: 'Cabin', blurb: 'Cabin filter, dome lights, key fob and the diagnostic port under the dash.', behind: 'door', seeThrough: true, related: ['fusebox_cabin'] },
   fusebox_cabin: { id: 'fusebox_cabin', label: 'Cabin fuse panel', blurb: 'Behind a small cover under or beside the dash. The diagram is on the lid.', behind: 'door' },
   fueldoor: { id: 'fueldoor', label: 'Fuel door', blurb: 'A loose or cracked gas cap is the most common check-engine light there is.' },
   exhaust: { id: 'exhaust', label: 'Exhaust', blurb: 'Oxygen sensors live here and are a frequent cause of check-engine codes.' },

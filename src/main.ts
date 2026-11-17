@@ -8,11 +8,22 @@ import { mountPanel } from './ui/panel';
 import { openGlossary } from './ui/glossary';
 import { h, clear } from './ui/dom';
 import { hydrateIcons } from './ui/icons';
+import { mountPaintShop } from './ui/paintShop';
+import { guessBody } from './data/makes';
+import { FINISHES } from './data/paint';
+import type { Appearance } from './scene/scene';
 
 hydrateIcons();
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
-const scene = createScene(canvas);
+function resolveAppearance(): Appearance {
+  const { appearance: a, vehicle: v } = getState();
+  const f = FINISHES[a.finish] ?? FINISHES.gloss;
+  return { kind: a.body === 'auto' ? guessBody(v.make, v.model) : a.body, color: a.color, shine: f.shine, metal: f.metal };
+}
+
+const scene = createScene(canvas, resolveAppearance());
+mountPaintShop(document.getElementById('paint-shop')!);
 
 mountVehiclePicker(document.getElementById('vehicle-picker')!);
 mountPanel(document.getElementById('panel')!);
@@ -39,6 +50,7 @@ subscribe((s, prev) => {
     history.replaceState(null, '', hash || location.pathname + location.search);
   }
   if (s.vehicle.powertrain !== prev.vehicle.powertrain) renderQuickFixes();
+  if (s.appearance !== prev.appearance || s.vehicle !== prev.vehicle) scene.setAppearance(resolveAppearance());
 });
 
 // Quick-fix bar: featured repairs for the current powertrain.

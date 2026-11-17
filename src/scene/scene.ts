@@ -1,25 +1,30 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { PARTS, type PartId } from '../data/parts';
-import { buildCar, type CarRig, type LidId } from './car';
-import { tween, updateTweens, easeInOutCubic } from './tween';
+import { buildCar, type BodyKind, type CarRig, type LidId, type Paint } from './car';
+import { tween, updateTweens, easeInOutCubic, easeOutBack, lerp } from './tween';
+import { lineMaterials, setHighlight, shared, toon } from './toon';
+
+export interface Appearance extends Paint {
+  kind: BodyKind;
+}
 
 export interface SceneApi {
   focus(part: PartId | null): void;
   onSelect(cb: (part: PartId | null) => void): void;
   onHover(cb: (part: PartId | null) => void): void;
+  setAppearance(a: Appearance): void;
 }
 
-export function createScene(canvas: HTMLCanvasElement): SceneApi {
+export function createScene(canvas: HTMLCanvasElement, initial: Appearance): SceneApi {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMapping = THREE.NoToneMapping; // keep comic colours punchy
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
 
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
@@ -31,9 +36,9 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi {
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.5;
 
-  // Lights
-  scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x1a1410, 0.7));
-  const key = new THREE.DirectionalLight(0xfff1e0, 1.5);
+  // Lights: warm key, cool fill, magenta + cyan rims for the Spider-Verse look.
+  scene.add(new THREE.HemisphereLight(0xc9d2ff, 0x2a1830, 0.75));
+  const key = new THREE.DirectionalLight(0xfff0dc, 1.45);
   key.position.set(4, 7, 5);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
@@ -44,18 +49,18 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi {
   key.shadow.bias = -0.0005;
   key.shadow.normalBias = 0.02;
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0x9cc4ff, 0.6);
-  fill.position.set(-5, 3, -4);
-  scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffffff, 0.5);
-  rim.position.set(0, 4, -8);
-  scene.add(rim);
+  const magenta = new THREE.DirectionalLight(0xff4fd8, 0.9);
+  magenta.position.set(-6, 3, -4);
+  scene.add(magenta);
+  const cyan = new THREE.DirectionalLight(0x45e0ff, 0.8);
+  cyan.position.set(6, 2.5, -5);
+  scene.add(cyan);
+  const front = new THREE.DirectionalLight(0xb8c4ff, 0.3);
+  front.position.set(-2, 3, 7);
+  scene.add(front);
 
-  // Ground: soft disc that catches the shadow and fades out.
-  const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(7, 64),
-    new THREE.MeshStandardMaterial({ color: 0x1b1f27, roughness: 1, metalness: 0 }),
-  );
+  // Ground: toon disc so the car's shadow picks up halftone dots.
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(7, 64), toon(0x1d2133, { halftone: 1 }));
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
@@ -67,7 +72,8 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi {
   ring.position.y = 0.001;
   scene.add(ring);
 
-  const car: CarRig = buildCar();
+  let car: CarRig = buildCar(initial.kind);
+  car.setPaint(initial, true);
   scene.add(car.group);
   camera.position.set(...car.overview.pos);
   controls.target.set(...car.overview.target);
@@ -75,46 +81,54 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi {
   // Hover / selection highlighting
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  const allHotspots: THREE.Mesh[] = [];
-  car.hotspots.forEach((list) => allHotspots.push(...list));
+  let allHotspots: THREE.Mesh[] = [];
+  const baseEmissive = new Map<THREE.Mesh, { color: THREE.Color; intensity: number }>();
 
+  function indexHotspots(): void {
+    allHotspots = [];
+    baseEmissive.clear();
+    car.hotspots.forEach((list) => allHotspots.push(...list));
+    for (const m of allHotspots) {
+      const mat = m.material as THREE.MeshToonMaterial;
+      if (mat.emissive) baseEmissive.set(m, { color: mat.emissive.clone(), intensity: mat.emissiveIntensity });
+    }
+  }
+  indexHotspots();
+
+  const HILITE = new THREE.Color(0x6ee7ff);
   let hovered: PartId | null = null;
   let selected: PartId | null = null;
   const selectCbs: ((p: PartId | null) => void)[] = [];
   const hoverCbs: ((p: PartId | null) => void)[] = [];
 
-  const baseEmissive = new Map<THREE.Mesh, { color: THREE.Color; intensity: number }>();
-  for (const m of allHotspots) {
-    const mat = m.material as THREE.MeshStandardMaterial;
-    if (mat.emissive) baseEmissive.set(m, { color: mat.emissive.clone(), intensity: mat.emissiveIntensity });
-  }
-
-  function setGlow(part: PartId | null, strength: number): void {
+  function setGlow(part: PartId | null, level: 'none' | 'hover' | 'selected'): void {
     if (!part) return;
     for (const m of car.hotspots.get(part) ?? []) {
       if (m.userData.beacon) continue;
-      const mat = m.material as THREE.MeshStandardMaterial;
+      setHighlight(m, level);
+      // A faint lift so small dark parts read as selected too.
+      const mat = m.material as THREE.MeshToonMaterial;
       const base = baseEmissive.get(m);
       if (!base) continue;
-      if (strength === 0) {
+      if (level === 'selected') {
+        mat.emissive.copy(base.color).lerp(HILITE, 0.1);
+        mat.emissiveIntensity = Math.max(base.intensity, 1);
+      } else {
         mat.emissive.copy(base.color);
         mat.emissiveIntensity = base.intensity;
-      } else {
-        mat.emissive.set(0x6ee7ff);
-        mat.emissiveIntensity = base.intensity + strength;
       }
     }
   }
 
   function refreshGlow(): void {
-    for (const p of car.hotspots.keys()) setGlow(p, 0);
-    if (hovered && hovered !== selected) setGlow(hovered, 0.12);
-    if (selected) setGlow(selected, 0.2);
+    for (const p of car.hotspots.keys()) setGlow(p, 'none');
+    if (hovered && hovered !== selected) setGlow(hovered, 'hover');
+    if (selected) setGlow(selected, 'selected');
   }
 
   function partVisible(part: PartId): boolean {
-    const behind = PARTS[part].behind;
-    return !behind || car.isLidOpen(behind);
+    const { behind, seeThrough } = PARTS[part];
+    return !behind || seeThrough === true || car.isLidOpen(behind);
   }
 
   function pickPart(ev: PointerEvent): PartId | null {
@@ -127,7 +141,6 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi {
       const part = h.object.userData.part as PartId | undefined;
       if (!part) continue;
       if (h.object.userData.beacon && !h.object.visible) continue;
-      // Parts hidden under a closed lid can't be picked, but the lid itself can.
       if (!partVisible(part)) continue;
       return part;
     }
@@ -144,6 +157,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi {
     downAt = null;
     if (moved > 6) return;
     const part = pickPart(e);
+    if (part && part === selected) car.poke(part); // re-clicking replays the part's little animation
     selectCbs.forEach((cb) => cb(part));
   });
   canvas.addEventListener('pointermove', (e) => {
@@ -161,7 +175,6 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi {
     hoverCbs.forEach((cb) => cb(null));
   });
 
-  // Idle auto-rotate: pause on interaction, resume after a while when nothing is selected.
   let idleTimer: number | undefined;
   controls.addEventListener('start', () => {
     controls.autoRotate = false;
@@ -190,38 +203,104 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi {
     });
   }
 
-  function focus(part: PartId | null): void {
-    selected = part;
-    controls.autoRotate = false;
-    window.clearTimeout(idleTimer);
-
-    const wantOpen: Record<LidId, boolean> = { hood: false, trunk: false, door: false };
+  function applyLids(part: PartId | null): void {
+    const want: Record<LidId, boolean> = { hood: false, trunk: false, door: false };
     if (part) {
       const behind = PARTS[part].behind;
-      if (behind) wantOpen[behind] = true;
-      if (part === 'hood' || part === 'trunk' || part === 'door') wantOpen[part] = true;
+      if (behind) want[behind] = true;
+      if (part === 'hood' || part === 'trunk' || part === 'door') want[part] = true;
     }
-    (Object.keys(wantOpen) as LidId[]).forEach((lid) => car.setLid(lid, wantOpen[lid]));
+    (Object.keys(want) as LidId[]).forEach((lid) => car.setLid(lid, want[lid]));
+  }
 
+  function flyToPart(part: PartId | null): void {
     if (part) {
       // Pull back a little and shift the target so the part sits left of the side panel.
       const v = car.views[part];
       const t = new THREE.Vector3(...v.target);
       const p = new THREE.Vector3(...v.pos).sub(t).multiplyScalar(1.3).add(t);
-      const panelOpen = window.innerWidth > 720;
-      if (panelOpen) {
+      if (window.innerWidth > 720) {
         const right = new THREE.Vector3().subVectors(t, p).cross(new THREE.Vector3(0, 1, 0)).normalize();
         const shift = right.multiplyScalar(p.distanceTo(t) * 0.18);
         t.add(shift);
         p.add(shift);
       }
       flyTo([p.x, p.y, p.z], [t.x, t.y, t.z]);
-    }
-    else {
+    } else {
       flyTo(car.overview.pos, car.overview.target);
       idleTimer = window.setTimeout(() => (controls.autoRotate = true), 4000);
     }
+  }
+
+  function focus(part: PartId | null): void {
+    selected = part;
+    controls.autoRotate = false;
+    window.clearTimeout(idleTimer);
+    applyLids(part);
+    flyToPart(part);
     refreshGlow();
+    if (part) car.poke(part);
+  }
+
+  // ---------- body swaps + paint ----------
+  let swapping = false;
+  let pending: Appearance | null = null;
+  let current: Appearance = initial;
+
+  function swap(a: Appearance): void {
+    swapping = true;
+    const old = car;
+    tween({
+      duration: 220,
+      ease: (t) => t * t,
+      tag: 'swap-out',
+      update: (k) => old.group.scale.setScalar(Math.max(0.001, lerp(1, 0, k))),
+      done: () => {
+        scene.remove(old.group);
+        old.dispose();
+        car = buildCar(a.kind);
+        car.setPaint(a, true);
+        car.group.scale.setScalar(0.001);
+        scene.add(car.group);
+        syncLineResolution();
+        indexHotspots();
+        applyLids(selected);
+        refreshGlow();
+        if (selected) flyToPart(selected);
+        else flyTo(car.overview.pos, car.overview.target);
+        tween({
+          duration: 560,
+          ease: easeOutBack,
+          tag: 'swap-in',
+          update: (k) => car.group.scale.setScalar(Math.max(0.001, k)),
+          done: () => {
+            swapping = false;
+            if (pending) {
+              const next = pending;
+              pending = null;
+              setAppearance(next);
+            }
+          },
+        });
+      },
+    });
+  }
+
+  function setAppearance(a: Appearance): void {
+    if (swapping) {
+      pending = a;
+      return;
+    }
+    const prev = current;
+    current = a;
+    if (a.kind !== car.kind) swap(a);
+    else if (a.color !== prev.color || a.shine !== prev.shine || a.metal !== prev.metal) car.setPaint(a);
+  }
+
+  // ---------- render loop ----------
+  function syncLineResolution(): void {
+    const { clientWidth: w, clientHeight: h } = canvas.parentElement ?? canvas;
+    lineMaterials.forEach((m) => m.resolution.set(w, h));
   }
 
   function resize(): void {
@@ -229,10 +308,13 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    shared.uDotSize.value = 5.5 * renderer.getPixelRatio();
+    syncLineResolution();
   }
   window.addEventListener('resize', resize);
   resize();
 
+  const keyDir = new THREE.Vector3();
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
     const t = clock.getElapsedTime();
@@ -242,6 +324,10 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi {
       b.visible = partVisible(part) && part !== selected;
     });
     controls.update();
+    camera.updateMatrixWorld();
+    keyDir.copy(key.position).sub(key.target.position).normalize();
+    shared.uKeyDir.value.copy(keyDir).transformDirection(camera.matrixWorldInverse);
+    shared.uUpView.value.set(0, 1, 0).transformDirection(camera.matrixWorldInverse);
     renderer.render(scene, camera);
   });
 
@@ -249,5 +335,6 @@ export function createScene(canvas: HTMLCanvasElement): SceneApi {
     focus,
     onSelect: (cb) => selectCbs.push(cb),
     onHover: (cb) => hoverCbs.push(cb),
+    setAppearance,
   };
 }
