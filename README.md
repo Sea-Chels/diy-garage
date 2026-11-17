@@ -6,13 +6,13 @@ Click a part of a stylized 3D car, see the repairs you can safely do yourself, a
 
 Purely client-side: Vite + TypeScript + Three.js, no backend, no database.
 
-![Clicking quick fixes opens the hood and trunk, then the glossary searches every job](docs/demo.gif)
+![Switching to a blue metallic SUV in the Paint menu, then opening the hood, running the wipers, lifting the liftgate and searching the glossary](docs/demo.gif)
 
 | Pick a part, get the job | Search everything you can fix |
 |---|---|
-| ![Oil change steps, tools and cautions beside the open engine bay](docs/repair-panel.jpg) | ![Glossary filtered to fuse-related jobs](docs/glossary.jpg) |
+| ![Oil change steps, tools and cautions beside the SUV's open engine bay](docs/repair-panel.jpg) | ![Glossary filtered to fuse-related jobs](docs/glossary.jpg) |
 
-![The car at rest with glowing dots on each clickable part](docs/overview.jpg)
+![Inked red sedan with glowing dots on each clickable part and the Paint menu open](docs/overview.jpg)
 
 ## Run
 
