@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "lucide": "^1.73.0",
+    "lucide": "^1.76.0",
     "three": "^0.187.0"
   },
   "devDependencies": {
